@@ -1,38 +1,67 @@
 import time
 import mysql.connector
+from mysql.connector import Error
 
-print("🔌 Connecting to database via FaultLine (Port 3307)...")
-try:
-    conn = mysql.connector.connect(
-        host="127.0.0.1",
-        port=3307,          
-        user="root",
-        password="Mmsql@21",
-        database="microlms_db"
-    )
-    cursor = conn.cursor()
-    print("✅ Connection successful!")
+# Configuration
+DB_CONFIG = {
+    "host": "127.0.0.1",
+    "port": 3307,          
+    "user": "root",
+    "password": "Mmsql@21",
+    "database": "microlms_db",
+    "ssl_disabled": True
+}
 
-    print("\n🚀 Commencing live query stream. Watch the latency...")
-    print("-" * 50)
-    
-    # Infinite loop to keep pinging the database
+def establish_connection():
+    """Infinitely loops until a connection is secured."""
     while True:
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            print("\n✅ [SYSTEM] Connection established! Commencing data stream...")
+            return conn
+        except Error as e:
+            print(f"🔄 [SYSTEM] Database unreachable ({e.msg}). Retrying in 2 seconds...")
+            time.sleep(2)
+
+print("🛡️  RESILIENT CLIENT ONLINE")
+print("-" * 50)
+
+# Initial Connection
+conn = establish_connection()
+
+while True:
+    try:
+        # Pre-flight check to ensure the connection hasn't been quietly dropped
+        conn.ping(reconnect=False)
+        cursor = conn.cursor()
+        
         start_time = time.time()
-        
-        # We will just run a simple query that works on any database
         cursor.execute("SELECT 1")
-        rows = cursor.fetchall()
-        
-        end_time = time.time()
-        latency = end_time - start_time
+        cursor.fetchall()
+        latency = time.time() - start_time
         
         if latency > 1.0:
-            print(f"⚠️  [CRITICAL] Database locked! Query took {latency:.2f} seconds!")
+            print(f"⚠️  [CRITICAL] Database locked! Latency: {latency:.2f}s")
         else:
-            print(f"⚡ [OK] Query executed in {latency:.4f} seconds.")
+            print(f"⚡ [OK] Query executed in {latency:.4f}s")
             
+        cursor.close()
         time.sleep(1) 
 
-except Exception as e:
-    print(f"❌ Connection Failed: {e}")
+    except Error as e:
+        # The exact moment FaultLine attacks
+        print(f"\n💥 [FATAL] CONNECTION LOST: {e.msg}")
+        print("🛠️  [SYSTEM] Initiating auto-recovery sequence...")
+        
+        # Clean up the dead connection
+        try:
+            conn.close()
+        except:
+            pass
+            
+        # Trigger the self-healing loop
+        conn = establish_connection()
+        
+    except KeyboardInterrupt:
+        print("\nShutting down client.")
+        break
