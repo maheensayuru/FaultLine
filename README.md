@@ -6,6 +6,38 @@ FaultLine is a multi-threaded TCP proxy designed to sit between your local backe
 
 ### ⚙️ The Architecture
 FaultLine operates as an asynchronous Man-in-the-Middle (MITM) proxy at the TCP/IP layer. 
+
+```mermaid
+flowchart LR
+    %% Define Styles
+    classDef client fill:#2d3436,stroke:#74b9ff,stroke-width:2px,color:#fff;
+    classDef db fill:#2d3436,stroke:#55efc4,stroke-width:2px,color:#fff;
+    classDef proxy fill:#2d3436,stroke:#ff7675,stroke-width:2px,stroke-dasharray: 5 5,color:#fff;
+    classDef internal fill:#1e272e,stroke:#a4b0be,stroke-width:1px,color:#fff;
+
+    %% Nodes
+    App["Backend Application\n(chaos_test.py)"]:::client
+    DB[("MySQL Database\n(Port 3306)")]:::db
+
+    subgraph FaultLine ["⚠️ FaultLine Chaos Proxy (Port 3307)"]
+        direction TB
+        Listener["TCP Async Listener"]:::internal
+        Command[/"Terminal Command Center"\]:::internal
+        
+        subgraph Pipes ["Bi-Directional Byte Pipes"]
+            C2D["Client -> DB Pipe\n(Pass-through)"]:::internal
+            D2C["DB -> Client Pipe\n(Chaos Injection Zone)"]:::internal
+        end
+
+        Listener --> Pipes
+        Command -. "Updates Global State\n(Latency / Drop Rate)" .-> D2C
+    end
+
+    %% Connections
+    App <== "Raw TCP Stream" ==> Listener
+    C2D == "Forwarded Request" ==> DB
+    DB == "Database Response" ==> D2C
+```
 - **Traffic Interception:** Built with Python `asyncio` to natively handle high-concurrency byte streams without blocking.
 - **Live Command Center:** Utilizes background thread delegation to allow developers to issue real-time network manipulation commands while data is actively flowing.
 - **Protocol Agnostic:** Forwards raw bytes, meaning it works out-of-the-box with MySQL, PostgreSQL, Redis, or any TCP-based connection.
